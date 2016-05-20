@@ -5,7 +5,7 @@ Simple and fast application without any runtime dependency (except libc) that co
 # Install from remotes
 
 ```bash
-git clone git clone --recursive URL
+git clone git clone --recursive https://github.com/reddec/rds-channel.git
 make
 make install
 # or

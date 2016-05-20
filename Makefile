@@ -29,7 +29,7 @@ $(BUILDIR)/info.md: $(BUILDIR)/$(WIZARD) $(BUILDIR)/$(NAME)
 	echo "* **Builder**: $(USER)"                >> $(BUILDIR)/info.md
 	echo "* **Time**   : $(shell date)"          >> $(BUILDIR)/info.md
 	echo "* **Machine**: $(shell uname -m)"      >> $(BUILDIR)/info.md
-	echo "* **Tool**   : $(shell gcc --version | head -n 1)" >> $(BUILDIR)/info.md
+	echo "* **Tool**   : $(shell $(CC) --version | head -n 1)" >> $(BUILDIR)/info.md
 	echo ""	                                     >> $(BUILDIR)/info.md
 	echo "## Package listing"                    >> $(BUILDIR)/info.md
 	echo ""                                      >> $(BUILDIR)/info.md

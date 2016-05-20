@@ -1,16 +1,27 @@
 NAME=rds-channel
-CC=gcc
-PREFIX=/usr/local/bin/
+CC?=gcc
+PREFIX?=/usr/local/bin
 WIZARD=rds-add-channel
-CFLAGS=-O3 -DNDEBUG -pedantic -std=c99 -Wall -Wextra -static
-TARGET=$(shell gcc --print-multiarch)
+CFLAGS?=-O3 -DNDEBUG -pedantic -std=c99 -Wall -Wextra -static
+TARGET=$(shell uname -m)
 BUILDIR=build/$(TARGET)
 
-all: main.c ./hiredis/libhiredis.a
+all: package
+	echo "Done"
+
+clean: ./hiredis/Makefile
+	cd ./hiredis && $(MAKE) clean
+	rm -rf $(BUILDIR)
+
+$(BUILDIR)/$(NAME): main.c ./hiredis/libhiredis.a
 	mkdir -p $(BUILDIR)
 	rm -rf $(BUILDIR)/*
 	$(CC) $(CFLAGS) -I./hiredis main.c ./hiredis/libhiredis.a -o $(BUILDIR)/$(NAME)
+
+$(BUILDIR)/$(WIZARD): $(WIZARD)
 	cp $(WIZARD) $(BUILDIR)/
+
+$(BUILDIR)/info.md: $(BUILDIR)/$(WIZARD) $(BUILDIR)/$(NAME)
 	echo "# Project: $(NAME)" > $(BUILDIR)/info.md
 	echo "" >> $(BUILDIR)/info.md
 	echo "## Meta information" >> $(BUILDIR)/info.md
@@ -18,7 +29,6 @@ all: main.c ./hiredis/libhiredis.a
 	echo "* **Builder**: $(USER)"                >> $(BUILDIR)/info.md
 	echo "* **Time**   : $(shell date)"          >> $(BUILDIR)/info.md
 	echo "* **Machine**: $(shell uname -m)"      >> $(BUILDIR)/info.md
-	echo "* **Target** : $(shell gcc --print-multiarch)" >> $(BUILDIR)/info.md
 	echo "* **Tool**   : $(shell gcc --version | head -n 1)" >> $(BUILDIR)/info.md
 	echo ""	                                     >> $(BUILDIR)/info.md
 	echo "## Package listing"                    >> $(BUILDIR)/info.md
@@ -29,10 +39,11 @@ all: main.c ./hiredis/libhiredis.a
 	echo ""                                      >> $(BUILDIR)/info.md 
 	ls -nph | grep -v / | grep -v Makefile       >> $(BUILDIR)/info.md
 
-package: all
+
+package: $(BUILDIR)/$(NAME) $(BUILDIR)/$(WIZARD) $(BUILDIR)/info.md
 	tar -zcvf $(NAME)-$(TARGET).tar.gz -C $(BUILDIR) `ls $(BUILDIR)`
 
-install: all
+install: $(BUILDIR)/$(NAME) $(BUILDIR)/$(WIZARD)
 	install $(BUILDIR)/$(NAME) $(PREFIX)
 	install $(BUILDIR)/$(WIZARD) $(PREFIX)
 

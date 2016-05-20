@@ -7,9 +7,18 @@ echo "This script will create supervisor service, so root priviliges will be ask
 echo "-------------------------"
 echo ""
 echo "1. Where is source (typically remote) REDIS? Write in host:port format please (ex. 10.0.0.1:6379)"
-read  REMOTE
+if [ "1$REMOTE" == "1" ]; then
+  read  REMOTE
+else
+  echo "$REMOTE"
+fi
+
 echo "2. Where is targert (typically local) REDIS? Write in host:port (ex. 127.0.0.1:6379) or leave it empty for default"
-read LOCAL
+if [ "1$LOCAL" == "1" ]; then
+  read LOCAL
+else
+  echo "$LOCAL"
+fi
 
 if [ "1$LOCAL" == "1" ]; then
   LOCAL="127.0.0.1:6379"
@@ -17,9 +26,18 @@ fi
 
 echo "3. Source info"
 echo "3.1 What is scope/project name? Like smart1, home1, room1"
-read SCOPE
+if [ "1$SCOPE" == "1" ]; then
+  read SCOPE
+else
+  echo "$SCOPE"
+fi
+
 echo "3.2 What is source name? Like server1, node1 or something else"
-read NAME
+if [ "1$NAME" == "1" ]; then
+  read NAME
+else
+  echo "$NAME"
+fi
 
 RDS_CHANNEL=`whereis $BIN_NAME | awk '{print $2}'`
 if [ "1$RDS_CHANNEL" == "1" ]; then

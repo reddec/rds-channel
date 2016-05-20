@@ -1,7 +1,7 @@
 NAME=rds-channel
 PREFIX=/usr/local/bin/
 WIZARD=rds-add-channel
-CFLAGS=-O3 -DNDEBUG -pedantic -Wall -Wextra -std=c11 -static
+CFLAGS=-O3 -DNDEBUG -pedantic -std=c99 -Wall -Wextra -static
 TARGET=$(shell gcc --print-multiarch)
 BUILDIR=build/$(TARGET)
 

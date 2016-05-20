@@ -11,7 +11,7 @@ Use [releases tabs](https://github.com/reddec/rds-channel/releases)
 # Install from remotes
 
 ```bash
-git clone git clone --recursive https://github.com/reddec/rds-channel.git
+git clone --recursive https://github.com/reddec/rds-channel.git
 make
 make install
 # or

@@ -92,11 +92,12 @@ int main(int argc, char **argv) {
   // 3 - host dest
   // 4 - port dest
   // 5 - prefix (optional)
-  if (argc < 2) {
+  if (argc < 2 || strcmp(argv[1], "--version") == 0) {
     fprintf(stderr,
-            "usage: <host src> [port-src = 6379] [host-dest = 127.0.0.1] "
+            "usage: <host src | --version> [port-src = 6379] [host-dest = "
+            "127.0.0.1] "
             "[port-dest = 6379] [prefix = '']\n");
-    return 1;
+    return argc < 2 ? 1 : 0;
   }
   const char *host = argv[1];
   int port = defargi(2, 6379);

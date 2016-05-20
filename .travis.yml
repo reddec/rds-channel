@@ -1,5 +1,7 @@
 language: C
 install: git submodule update --init --recursive
+env:
+  - PREFIX=/tmp
 script: make package && make install
 compiler:
   - clang

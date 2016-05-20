@@ -1,4 +1,5 @@
 NAME=rds-channel
+CC=gcc
 PREFIX=/usr/local/bin/
 WIZARD=rds-add-channel
 CFLAGS=-O3 -DNDEBUG -pedantic -std=c99 -Wall -Wextra -static
@@ -8,7 +9,7 @@ BUILDIR=build/$(TARGET)
 all: main.c ./hiredis/libhiredis.a
 	mkdir -p $(BUILDIR)
 	rm -rf $(BUILDIR)/*
-	gcc $(CFLAGS) -I./hiredis main.c ./hiredis/libhiredis.a -o $(BUILDIR)/$(NAME)
+	$(CC) $(CFLAGS) -I./hiredis main.c ./hiredis/libhiredis.a -o $(BUILDIR)/$(NAME)
 	cp $(WIZARD) $(BUILDIR)/
 	echo "# Project: $(NAME)" > $(BUILDIR)/info.md
 	echo "" >> $(BUILDIR)/info.md

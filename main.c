@@ -138,14 +138,14 @@ int start_channel(channel_t *ch) {
   ch->source = NULL;
   ch->target = NULL;
   ch->notification = NULL;
-  int ret = create_source_connection(ch) == 0 &&        //
-            create_notification_connection(ch) == 0 &&  //
-            create_target_connection(ch) == 0 &&        //
-            dump_data(ch) == 0 &&                       //
-            enable_event_notifications(ch) == 0 &&      //
-            catch_notifications(ch) == 0;               //
+  bool ret = create_source_connection(ch) == 0 &&        //
+             create_notification_connection(ch) == 0 &&  //
+             create_target_connection(ch) == 0 &&        //
+             dump_data(ch) == 0 &&                       //
+             enable_event_notifications(ch) == 0 &&      //
+             catch_notifications(ch) == 0;               //
   clean_up(ch);
-  return ret;
+  return ret ? 0 : 1;
 }
 
 void clean_up(channel_t *ch) {

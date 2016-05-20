@@ -17,37 +17,63 @@
 #define defargs(pos, def_value) (((pos) < argc) ? argv[(pos)] : (def_value))
 #define defargi(pos, def_value) \
   (((pos) < argc) ? atoi(argv[(pos)]) : (def_value))
+
+typedef struct address_t {
+  const char *host;  // IP or host name
+  int port;          // Valid AF_INET port (0<port<65535)
+} address_t;
+
+typedef struct channel_t {
+  address_t source_ad,
+      target_ad;         // Addresses of source and target REDIS databases
+  redisContext *source,  // Connection context to source REDIS database
+      *notification,     // Same as source, but used for notifications listener
+      *target;           // Connection context to target REDIS database
+  const char *prefix;    // New prefix for each key
+  size_t prefix_len;     // Len of prefix
+} channel_t;
+
 /**
-* Open REDIS connection to remote side then open local connection.
+* Start processing keys: create -> dump -> enable -> catch -> cleanup.
+* Expects ch will be filled by zero
+*/
+int start_channel(channel_t *ch);
+
+/**
+* Clean all allocation resources during channel (automatically invoked by
+* start_channel)
+*/
+void clean_up(channel_t *ch);
+
+/**
+* Open REDIS connection to remote side
 **/
-int open_remote_connection(const char *local_host, int local_port,
-                           const char *remote_host, int remote_port,
-                           const char *prefix, size_t prefix_len);
+int create_source_connection(channel_t *ch);
+
+/**
+* Open REDIS connection to remote side for notification listener
+*/
+int create_notification_connection(channel_t *ch);
 
 /**
 * Setup remote REDIS for keyevent space notification
 */
-int enable_event_notifications(redisContext *remote);
+int enable_event_notifications(channel_t *ch);
 
 /**
-* Open connection to local REDIS then dump data and then catch notification of
-*any changes
+* Open connection to target REDIS
 **/
-int open_local_connection(redisContext *remote, redisContext *remote2,
-                          const char *local_host, int local_port,
-                          const char *prefix, size_t prefix_len);
+int create_target_connection(channel_t *ch);
+
 /**
 * Copy all keys from remote REDIS to local with new prefix for each key
 **/
-int dump_data(redisContext *local_ctx, redisContext *remote_ctx,
-              const char *prefix, size_t prefix_len);
+int dump_data(channel_t *ch);
 
 /**
 * Subscribe to any changes of remote REDIS and copy changed values
 **/
-int catch_notifications(redisContext *local_ctx, redisContext *remote_ctx,
-                        redisContext *remote2_ctx, const char *prefix,
-                        size_t prefix_len);
+int catch_notifications(channel_t *ch);
 
 /**
 * DUMP and restore single key
@@ -88,56 +114,71 @@ int main(int argc, char **argv) {
   }
 
   printf("from: %s:%i\n", host, port);
+
   printf("  to: %s:%i\n", local_host, local_port);
   printf("pref: %s\n", prefix);
-  return open_remote_connection(local_host, local_port, host, port, prefix,
-                                strlen(prefix));
+  channel_t ch;
+  memset(&ch, 0, sizeof(ch));
+  ch.source_ad.host = host;
+  ch.source_ad.port = port;
+  ch.target_ad.host = local_host;
+  ch.target_ad.port = local_port;
+  ch.prefix = prefix;
+  ch.prefix_len = strlen(prefix);
+  return start_channel(&ch);
 }
 
-int open_remote_connection(const char *local_host, int local_port,
-                           const char *remote_host, int remote_port,
-                           const char *prefix, size_t prefix_len) {
-  redisContext *c = redisConnect(remote_host, remote_port);
-  if_err_ret(!c, "failed allocate redis context", -1);
+int start_channel(channel_t *ch) {
+  assert(ch->target_ad.host);
+  assert(ch->source_ad.host);
+  assert(ch->source_ad.port > 0 && ch->source_ad.port < 65535);
+  assert(ch->target_ad.port > 0 && ch->target_ad.port < 65535);
+  assert(ch->prefix || ch->prefix_len == 0);
+  ch->source = NULL;
+  ch->target = NULL;
+  ch->notification = NULL;
+  int ret = create_source_connection(ch) == 0 &&        //
+            create_notification_connection(ch) == 0 &&  //
+            create_target_connection(ch) == 0 &&        //
+            dump_data(ch) == 0 &&                       //
+            enable_event_notifications(ch) == 0 &&      //
+            catch_notifications(ch) == 0;               //
+  clean_up(ch);
+  return ret;
+}
+
+void clean_up(channel_t *ch) {
+  if (ch->source) redisFree(ch->source);
+  if (ch->target) redisFree(ch->target);
+  if (ch->notification) redisFree(ch->notification);
+}
+
+int create_source_connection(channel_t *ch) {
+  redisContext *c = redisConnect(ch->source_ad.host, ch->source_ad.port);
+  if_err_ret(!c, "failed allocate source redis context", -1);
   if_err_ret(c->err, c->errstr, -2);
-  redisContext *c2 = redisConnect(remote_host, remote_port);
-  if (!c2 || c2->err) {
-    redisFree(c);
-    return -1;
-  }
-  int ret =
-      open_local_connection(c, c2, local_host, local_port, prefix, prefix_len);
-  redisFree(c);
-  return ret;
+  ch->source = c;
+  return 0;
 }
 
-int open_local_connection(redisContext *remote, redisContext *remote2,
-                          const char *host, int port, const char *prefix,
-                          size_t prefix_len) {
-  assert(remote);
-  assert(remote2);
-  assert(remote != remote2);
-  redisContext *lc = redisConnect(host, port);
-  if_err_ret(!lc, "failed allocate local redis context", -1);
-  if_err_ret(lc->err, lc->errstr, -2);
-  int ret = dump_data(lc, remote, prefix, prefix_len);
-  if (ret == 0) {
-    ret = enable_event_notifications(remote);
-  }
-  if (ret == 0) {
-    ret = catch_notifications(lc, remote, remote2, prefix, prefix_len);
-  }
-  redisFree(lc);
-  return ret;
+int create_notification_connection(channel_t *ch) {
+  redisContext *c = redisConnect(ch->source_ad.host, ch->source_ad.port);
+  if_err_ret(!c, "failed allocate notification redis context", -1);
+  if_err_ret(c->err, c->errstr, -2);
+  ch->notification = c;
+  return 0;
+}
+
+int create_target_connection(channel_t *ch) {
+  redisContext *c = redisConnect(ch->target_ad.host, ch->target_ad.port);
+  if_err_ret(!c, "failed allocate target redis context", -1);
+  if_err_ret(c->err, c->errstr, -2);
+  ch->target = c;
+  return 0;
 }
 
 int copy_key(redisContext *local, redisContext *remote, const char *key,
              size_t key_len, const char *prefix, size_t prefix_len) {
-  assert(local);
-  assert(remote);
-  assert(local != remote);
-  assert(!local->err);
-  assert(!remote->err);
   redisReply *src = redisCommand(remote, "DUMP %b", key, (size_t)key_len);
   if_err_ret(!src, remote->errstr, -30);
   int ret = 0;
@@ -181,23 +222,20 @@ int copy_key(redisContext *local, redisContext *remote, const char *key,
   return ret;
 }
 
-int dump_data(redisContext *local, redisContext *remote, const char *prefix,
-              size_t prefix_len) {
+int dump_data(channel_t *ch) {
   int iterator = 0;
   int ret = 0;
-  assert(local);
-  assert(remote);
-  assert(local != remote);
-  assert(prefix || prefix_len == 0);
   do {
-    redisReply *reply = redisCommand(remote, "SCAN %i", iterator);
-    if_err_ret(!reply, remote->errstr, -20);
+    redisReply *reply = redisCommand(ch->source, "SCAN %i", iterator);
+    if_err_ret(!reply, ch->source->errstr, -20);
     iterator = reply->element[0]->integer;
     printf("batch size: %zu\n", reply->element[1]->elements);
     for (size_t i = 0; i < reply->element[1]->elements; ++i) {
       const char *key = reply->element[1]->element[i]->str;
       size_t key_len = reply->element[1]->element[i]->len;
-      if (copy_key(local, remote, key, key_len, prefix, prefix_len) != 0) {
+      if (copy_key(ch->target, ch->source,  //
+                   key, key_len,            //
+                   ch->prefix, ch->prefix_len) != 0) {
         break;
       }
     }
@@ -206,32 +244,27 @@ int dump_data(redisContext *local, redisContext *remote, const char *prefix,
   return ret;
 }
 
-int enable_event_notifications(redisContext *remote) {
+int enable_event_notifications(channel_t *ch) {
   redisReply *reply =
-      redisCommand(remote, "CONFIG SET notify-keyspace-events EA");
-  if_err_ret(!reply, remote->errstr, -50);
+      redisCommand(ch->notification, "CONFIG SET notify-keyspace-events EA");
+  if_err_ret(!reply, ch->notification->errstr, -50);
   freeReplyObject(reply);
   return 0;
 }
 
-int catch_notifications(redisContext *local, redisContext *remote,
-                        redisContext *remote2, const char *prefix,
-                        size_t prefix_len) {
-  assert(local);
-  assert(remote);
-  assert(remote2);
-  assert(local != remote);
-  assert(remote != remote2);
-  redisReply *reply = redisCommand(remote, "PSUBSCRIBE __key*__:*");
-  if_err_ret(!reply, remote->errstr, -30);
+int catch_notifications(channel_t *ch) {
+  redisReply *reply = redisCommand(ch->notification, "PSUBSCRIBE __key*__:*");
+  if_err_ret(!reply, ch->notification->errstr, -30);
   freeReplyObject(reply);
   int ret = 0;
-  while (ret == 0 && redisGetReply(remote, (void **)&reply) == REDIS_OK) {
+  while (ret == 0 &&
+         redisGetReply(ch->notification, (void **)&reply) == REDIS_OK) {
     // consume message
     printf("catch %s\n", reply->element[3]->str);
     if (strcmp(rindex(reply->element[2]->str, ':') + 1, "del") != 0) {
-      ret = copy_key(local, remote2, reply->element[3]->str,
-                     reply->element[3]->len, prefix, prefix_len);
+      ret = copy_key(ch->target, ch->source,                          //
+                     reply->element[3]->str, reply->element[3]->len,  //
+                     ch->prefix, ch->prefix_len);
     }
     freeReplyObject(reply);
   }

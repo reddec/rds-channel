@@ -152,9 +152,9 @@ int copy_key(redisContext *local, redisContext *remote, const char *key,
     temp[temp_len] = '\0';
     printf("------------------\n");
     printf("%s => %s\n", key, temp);
-    printf("source k-len: %i\n", key_len);
-    printf("target k-len: %i\n", temp_len);
-    printf("    data-len: %i\n", src->len);
+    printf("source k-len: %zu\n", key_len);
+    printf("target k-len: %zu\n", temp_len);
+    printf("    data-len: %zu\n", src->len);
     printf("        data:");
     for (size_t i = 0; i < src->len; ++i) {
       printf(" %02x", (unsigned char)src->str[i]);
@@ -193,7 +193,7 @@ int dump_data(redisContext *local, redisContext *remote, const char *prefix,
     redisReply *reply = redisCommand(remote, "SCAN %i", iterator);
     if_err_ret(!reply, remote->errstr, -20);
     iterator = reply->element[0]->integer;
-    printf("batch size: %i\n", reply->element[1]->elements);
+    printf("batch size: %zu\n", reply->element[1]->elements);
     for (size_t i = 0; i < reply->element[1]->elements; ++i) {
       const char *key = reply->element[1]->element[i]->str;
       size_t key_len = reply->element[1]->element[i]->len;

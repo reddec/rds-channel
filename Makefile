@@ -12,6 +12,7 @@ all: package
 clean: ./hiredis/Makefile
 	cd ./hiredis && $(MAKE) clean
 	rm -rf $(BUILDIR)
+	rm -rf $(NAME).tar.gz
 
 $(BUILDIR)/$(NAME): main.c ./hiredis/libhiredis.a
 	mkdir -p $(BUILDIR)
@@ -41,7 +42,7 @@ $(BUILDIR)/info.md: $(BUILDIR)/$(WIZARD) $(BUILDIR)/$(NAME)
 
 
 package: $(BUILDIR)/$(NAME) $(BUILDIR)/$(WIZARD) $(BUILDIR)/info.md
-	tar -zcvf $(NAME)-$(TARGET).tar.gz -C $(BUILDIR) `ls $(BUILDIR)`
+	tar -zcvf $(NAME).tar.gz -C $(BUILDIR) `ls $(BUILDIR)`
 
 install: $(BUILDIR)/$(NAME) $(BUILDIR)/$(WIZARD)
 	install $(BUILDIR)/$(NAME) $(PREFIX)

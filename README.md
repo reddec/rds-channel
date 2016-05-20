@@ -4,6 +4,10 @@
 
 Simple and fast application without any runtime dependency (except libc) that copies all keys from one REDIS databse to another one with custom key prefix. After first copy it is monitoring all key changes and updates values
 
+# Install for Linux
+
+Use [releases tabs](https://github.com/reddec/rds-channel/releases)
+
 # Install from remotes
 
 ```bash

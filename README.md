@@ -1,5 +1,7 @@
 # RDS-Channel
 
+[![Build Status](https://travis-ci.org/reddec/rds-channel.svg?branch=master)](https://travis-ci.org/reddec/rds-channel)
+
 Simple and fast application without any runtime dependency (except libc) that copies all keys from one REDIS databse to another one with custom key prefix. After first copy it is monitoring all key changes and updates values
 
 # Install from remotes

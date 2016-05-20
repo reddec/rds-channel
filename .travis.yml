@@ -1,0 +1,6 @@
+language: C
+install: git submodule update --init --recursive
+script: make package && make install
+compiler:
+  - clang
+  - gcc

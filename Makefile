@@ -6,6 +6,7 @@ CFLAGS?=-O3 -DNDEBUG -pedantic -std=c99 -Wall -Wextra -static
 TARGET=$(shell uname -m)
 BUILDIR=build/$(TARGET)
 
+
 all: package
 	echo "Done"
 

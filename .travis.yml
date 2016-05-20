@@ -6,9 +6,11 @@ script: make clean && make && make package && make install
 compiler:
 - gcc
 deploy:
+  skip_cleanup: true
   provider: releases
   api_key:
     secure: CkSO8dvesGj0qhEqGhYY3zDvqsy9WptAaVLgVCnYFsdzef0BbFCJFBz3jBxG70AqEXfVkGDy8JyVA7f37sgRGMMB6OM6LKre4uk5feMnDA8CeF16Ev3zdGiP9yEGkjTxhYQIrP6Ht9d0yybQkAfxPSO15WzI8wE+JTT4KQ6HkCduMCTQGMtx3KUCb4elJLe5U7c1yOxD4JyI2C/FkANJJymhSmBPB1YGignYvCAiIx6zWMUH4LzoDQRU4o63yV7jQayRlICE+/A2eWCga7J6XG6YJPBPpJbluUT/ib7r5J6x+yjPWKzbO+UZDemrqhpaKC/AVJ3Z6EpYvlqiGSyynkwQwrLTsq0RTkqCynL2+7pZyhkVzZcQcoGZcgIRzTpYa0UjWTBSPu6CFlT/hmOEFCB1SmKokw1Up6eL+jZXzddcPnwO2ruX/o5LjJvrUl5jOk7xeHkhSuHgIArICFVT2PsiNdbP8G23XBc4jAPFqX/UW2/yzvua8SMrwEIWT8mJbK+ua+f+CWqnoIkG7Z9dZ5sFoHfKO5R+muqckDsdaA19WxHklP7rl+vP5UBMYJNZv/2QOcdTcbf0IcB4tc/Mkm+QccmM2L0bLkoPjA6etAfBxP/6F13PjoT4TIbpHhOqzrv8wJNxnDCbWkE1bP8A0P8h0MnLZe2kapisqLFVdnA=
   file: rds-channel.tar.gz
   on:
     repo: reddec/rds-channel
+    tags: true

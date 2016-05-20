@@ -1,0 +1,90 @@
+#!/bin/bash
+set -e
+BIN_NAME="rds-channel"
+echo "Welcome to channel wizard"
+echo ""
+echo "This script will create supervisor service, so root priviliges will be asked"
+echo "-------------------------"
+echo ""
+echo "1. Where is source (typically remote) REDIS? Write in host:port format please (ex. 10.0.0.1:6379)"
+read  REMOTE
+echo "2. Where is targert (typically local) REDIS? Write in host:port (ex. 127.0.0.1:6379) or leave it empty for default"
+read LOCAL
+
+if [ "1$LOCAL" == "1" ]; then
+  LOCAL="127.0.0.1:6379"
+fi
+
+echo "3. Source info"
+echo "3.1 What is scope/project name? Like smart1, home1, room1"
+read SCOPE
+echo "3.2 What is source name? Like server1, node1 or something else"
+read NAME
+
+RDS_CHANNEL=`whereis $BIN_NAME | awk '{print $2}'`
+if [ "1$RDS_CHANNEL" == "1" ]; then
+  echo "4. RDS-Channel application ($BIN_NAME) not found. Where is it?"
+  read RDS_CHANNEL
+  RDS_CHANNEL=$(readlink -f "$RDS_CHANNEL")
+else
+  echo "4. RDS-Channel found: $RDS_CHANNEL"
+fi
+
+REMOTE_HOST=$(echo "$REMOTE" | tr ':' ' ' | awk '{print $1}')
+REMOTE_PORT=$(echo "$REMOTE" | tr ':' ' ' | awk '{print $2}') 
+LOCAL_HOST=$(echo "$LOCAL" | tr ':' ' ' | awk '{print $1}')                                                
+LOCAL_PORT=$(echo "$LOCAL" | tr ':' ' ' | awk '{print $2}')
+PREFIX="$SCOPE.$NAME."
+
+SERVICE="channel-$SCOPE-$NAME"
+
+echo "5. Check"
+echo "Is this information correct?"
+echo ""
+echo " Source: host=$REMOTE_HOST, port=$REMOTE_PORT"
+echo " Target: host=$LOCAL_HOST, port=$LOCAL_PORT"
+echo "Prerfix: $PREFIX"
+echo "Service: $SERVICE"
+echo "    Bin: $RDS_CHANNEL"
+echo ""
+echo "y/n?"
+read YN
+if [ "$YN" != "y" ]; then
+  if [ "1$YN" != "1" ]; then
+    echo "Bye!"
+    exit 1
+  fi
+fi
+
+echo "Thank you!"
+
+if [ ! `supervisord --version` ]; then                                                                        
+    echo "Supervisor not installed. Installing"                                                               
+    sudo apt-get install -y supervisor                                                                        
+fi
+
+SFILE=/tmp/"$SERVICE".conf
+cat > "$SFILE" << EOF
+[program:$SERVICE]
+command=$RDS_CHANNEL "$REMOTE_HOST" $REMOTE_PORT "$LOCAL_HOST" $LOCAL_PORT "$PREFIX"
+autostart=true
+autorestart=true
+startsecs=5
+startretries=999999999999999
+redirect_stderr=true
+EOF
+
+echo "Will now install service. Root password may be asked"
+sudo mv "$SFILE" /etc/supervisor/conf.d/
+echo "Installed. Start now? (y/n)"
+read YN                                                                                                       
+if [ "$YN" != "y" ]; then                                                                                      
+  if [ "1$YN" != "1" ]; then                                                                                   
+    echo "Bye!"                                                                                               
+    exit 1                                                                                                    
+  fi                                                                                                          
+fi
+sudo supervisorctl reread
+sudo supervisorctl update 
+#sudo supervisorctl restart "$SERVICE"
+echo "All done!"

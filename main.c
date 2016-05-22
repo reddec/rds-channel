@@ -61,6 +61,11 @@ int create_notification_connection(channel_t *ch);
 int enable_event_notifications(channel_t *ch);
 
 /**
+* Begin listen for events from remote REDIS
+*/
+int subscribe_for_events(channel_t *ch);
+
+/**
 * Open connection to target REDIS
 **/
 int create_target_connection(channel_t *ch);
@@ -141,8 +146,9 @@ int start_channel(channel_t *ch) {
   bool ret = create_source_connection(ch) == 0 &&        //
              create_notification_connection(ch) == 0 &&  //
              create_target_connection(ch) == 0 &&        //
-             dump_data(ch) == 0 &&                       //
              enable_event_notifications(ch) == 0 &&      //
+             subscribe_for_events(ch) == 0 &&            //
+             dump_data(ch) == 0 &&                       //
              catch_notifications(ch) == 0;               //
   clean_up(ch);
   return ret ? 0 : 1;
@@ -253,10 +259,15 @@ int enable_event_notifications(channel_t *ch) {
   return 0;
 }
 
-int catch_notifications(channel_t *ch) {
+int subscribe_for_events(channel_t *ch) {
   redisReply *reply = redisCommand(ch->notification, "PSUBSCRIBE __key*__:*");
   if_err_ret(!reply, ch->notification->errstr, -30);
   freeReplyObject(reply);
+  return 0;
+}
+
+int catch_notifications(channel_t *ch) {
+  redisReply *reply;
   int ret = 0;
   while (ret == 0 &&
          redisGetReply(ch->notification, (void **)&reply) == REDIS_OK) {
@@ -269,7 +280,7 @@ int catch_notifications(channel_t *ch) {
     }
     freeReplyObject(reply);
   }
-  return 1;
+  return ret;
 }
 
 bool check_next_reply(redisContext *ctx, const char *err_msg) {

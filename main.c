@@ -5,7 +5,7 @@
 #include <strings.h>
 #include <assert.h>
 #include <stdbool.h>
-#define RDS_CHANNEL_VERSION "0.3.1"
+#define RDS_CHANNEL_VERSION "0.3.2"
 
 #define if_err_ret(err, message, code)                                  \
   if ((err)) {                                                          \

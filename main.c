@@ -5,6 +5,7 @@
 #include <strings.h>
 #include <assert.h>
 #include <stdbool.h>
+#define RDS_CHANNEL_VERSION "0.3.1"
 
 #define if_err_ret(err, message, code)                                  \
   if ((err)) {                                                          \
@@ -97,12 +98,16 @@ int main(int argc, char **argv) {
   // 3 - host dest
   // 4 - port dest
   // 5 - prefix (optional)
-  if (argc < 2 || strcmp(argv[1], "--version") == 0) {
+  if (argc < 2) {
     fprintf(stderr,
             "usage: <host src | --version> [port-src = 6379] [host-dest = "
             "127.0.0.1] "
             "[port-dest = 6379] [prefix = '']\n");
-    return argc < 2 ? 1 : 0;
+    return 1;
+  }
+  if (strcmp(argv[1], "--version") == 0) {
+    printf("%s\n", RDS_CHANNEL_VERSION);
+    return 0;
   }
   const char *host = argv[1];
   int port = defargi(2, 6379);

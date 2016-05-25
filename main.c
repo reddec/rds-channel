@@ -1,11 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <hiredis.h>
 #include <string.h>
 #include <strings.h>
 #include <assert.h>
 #include <stdbool.h>
-#define RDS_CHANNEL_VERSION "0.3.2"
+#include <pthread.h>
+#include <unistd.h>
+
+#define RDS_CHANNEL_VERSION "0.3.3"
 
 #define if_err_ret(err, message, code)                                  \
   if ((err)) {                                                          \
@@ -18,7 +22,8 @@
 #define defargs(pos, def_value) (((pos) < argc) ? argv[(pos)] : (def_value))
 #define defargi(pos, def_value) \
   (((pos) < argc) ? atoi(argv[(pos)]) : (def_value))
-
+#define HEART_BEAT_INTERVAL 10
+#define HEART_BEAT_CHANNEL "heartbeat"
 typedef struct address_t {
   const char *host;  // IP or host name
   int port;          // Valid AF_INET port (0<port<65535)
@@ -29,9 +34,11 @@ typedef struct channel_t {
       target_ad;         // Addresses of source and target REDIS databases
   redisContext *source,  // Connection context to source REDIS database
       *notification,     // Same as source, but used for notifications listener
-      *target;           // Connection context to target REDIS database
-  const char *prefix;    // New prefix for each key
-  size_t prefix_len;     // Len of prefix
+      *target,           // Connection context to target REDIS database
+      *heartbeat;  // Connection context to source REDIS for pushing heartbeats
+  const char *prefix;      // New prefix for each key
+  size_t prefix_len;       // Len of prefix
+  pthread_t heartbeat_th;  // Thread of heartbeating
 } channel_t;
 
 /**
@@ -55,6 +62,11 @@ int create_source_connection(channel_t *ch);
 * Open REDIS connection to remote side for notification listener
 */
 int create_notification_connection(channel_t *ch);
+
+/**
+* Open REDIS connection to remote side for heartbeats listener
+*/
+int create_heartbeat_connection(channel_t *ch);
 
 /**
 * Setup remote REDIS for keyevent space notification
@@ -82,6 +94,11 @@ int dump_data(channel_t *ch);
 int catch_notifications(channel_t *ch);
 
 /**
+* Start thread for heartbeats
+*/
+int start_heartbeats(channel_t *ch);
+
+/**
 * DUMP and restore single key
 */
 int copy_key(redisContext *local, redisContext *remote, const char *key,
@@ -91,6 +108,16 @@ int copy_key(redisContext *local, redisContext *remote, const char *key,
 * Returns true if getReply success
 */
 bool check_next_reply(redisContext *ctx, const char *err_msg);
+
+/**
+* Publish heartbeat to REDIS
+*/
+bool push_heartbeat(redisContext *ctx);
+
+/**
+* Thread routing for heartbeats
+*/
+void *heartbeat_routing(void *ctx);
 
 int main(int argc, char **argv) {
   // 1 - host
@@ -148,21 +175,27 @@ int start_channel(channel_t *ch) {
   ch->source = NULL;
   ch->target = NULL;
   ch->notification = NULL;
+  ch->heartbeat = NULL;
   bool ret = create_source_connection(ch) == 0 &&        //
              create_notification_connection(ch) == 0 &&  //
              create_target_connection(ch) == 0 &&        //
+             create_heartbeat_connection(ch) == 0 &&     //
              enable_event_notifications(ch) == 0 &&      //
              subscribe_for_events(ch) == 0 &&            //
              dump_data(ch) == 0 &&                       //
+             start_heartbeats(ch) == 0 &&                //
              catch_notifications(ch) == 0;               //
   clean_up(ch);
   return ret ? 0 : 1;
 }
 
 void clean_up(channel_t *ch) {
+  pthread_cancel(ch->heartbeat_th);
   if (ch->source) redisFree(ch->source);
   if (ch->target) redisFree(ch->target);
   if (ch->notification) redisFree(ch->notification);
+  if (ch->heartbeat) redisFree(ch->heartbeat);
+  pthread_join(ch->heartbeat_th, NULL);
 }
 
 int create_source_connection(channel_t *ch) {
@@ -187,6 +220,22 @@ int create_target_connection(channel_t *ch) {
   if_err_ret(c->err, c->errstr, -2);
   ch->target = c;
   return 0;
+}
+
+int create_heartbeat_connection(channel_t *ch) {
+  redisContext *c = redisConnect(ch->source_ad.host, ch->source_ad.port);
+  if_err_ret(!c, "failed allocate heartbeat redis context", -1);
+  if_err_ret(c->err, c->errstr, -2);
+  ch->heartbeat = c;
+  return 0;
+}
+
+void *heartbeat_routing(void *ctx) {
+  redisContext *redis = (redisContext *)ctx;
+  while (0 && push_heartbeat(redis)) {
+    sleep(HEART_BEAT_INTERVAL);
+  }
+  return NULL;
 }
 
 int copy_key(redisContext *local, redisContext *remote, const char *key,
@@ -234,6 +283,11 @@ int copy_key(redisContext *local, redisContext *remote, const char *key,
   return ret;
 }
 
+int start_heartbeats(channel_t *ch) {
+  return pthread_create(&(ch->heartbeat_th), NULL, heartbeat_routing,
+                        (void *)(ch->heartbeat));
+}
+
 int dump_data(channel_t *ch) {
   int iterator = 0;
   int ret = 0;
@@ -268,24 +322,47 @@ int subscribe_for_events(channel_t *ch) {
   redisReply *reply = redisCommand(ch->notification, "PSUBSCRIBE __key*__:*");
   if_err_ret(!reply, ch->notification->errstr, -30);
   freeReplyObject(reply);
+  reply = redisCommand(ch->notification, "PSUBSCRIBE %s", HEART_BEAT_CHANNEL);
+  if_err_ret(!reply, ch->notification->errstr, -30);
+  freeReplyObject(reply);
   return 0;
 }
 
 int catch_notifications(channel_t *ch) {
+  struct timeval timeout = {HEART_BEAT_INTERVAL * 2, 0};
+  if_err_ret(redisSetTimeout(ch->notification, timeout) != REDIS_OK,
+             ch->notification->errstr, -20);
   redisReply *reply;
   int ret = 0;
-  while (ret == 0 &&
-         redisGetReply(ch->notification, (void **)&reply) == REDIS_OK) {
-    // consume message
-    printf("catch %s\n", reply->element[3]->str);
-    if (strcmp(rindex(reply->element[2]->str, ':') + 1, "del") != 0) {
+  while (ret == 0) {
+    reply = NULL;
+    int reply_code = redisGetReply(ch->notification, (void **)&reply);
+    if (reply_code == REDIS_ERR && ch->notification->err == REDIS_ERR_IO &&
+        errno == EAGAIN) {
+      puts("Heartbeat timeout");
+      ret = 1;
+    } else if (reply_code != REDIS_OK) {
+      ret = 1;
+    } else if (strcmp(reply->element[2]->str, HEART_BEAT_CHANNEL) == 0) {
+      puts("Heartbeat catched");
+      fflush(stdout);
+    } else if (strcmp(rindex(reply->element[2]->str, ':') + 1, "del") != 0) {
+      printf("catch %s\n", reply->element[3]->str);
       ret = copy_key(ch->target, ch->source,                          //
                      reply->element[3]->str, reply->element[3]->len,  //
                      ch->prefix, ch->prefix_len);
     }
-    freeReplyObject(reply);
+    if (reply) freeReplyObject(reply);
   }
   return ret;
+}
+
+bool push_heartbeat(redisContext *conn) {
+  redisReply *reply =
+      redisCommand(conn, "PUBLISH %s \"1\"", HEART_BEAT_CHANNEL);
+  if_err_ret(!reply, conn->errstr, false);
+  freeReplyObject(reply);
+  return true;
 }
 
 bool check_next_reply(redisContext *ctx, const char *err_msg) {

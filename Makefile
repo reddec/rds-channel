@@ -3,6 +3,7 @@ CC?=gcc
 PREFIX?=/usr/local/bin
 WIZARD=rds-add-channel
 CFLAGS?=-O3 -DNDEBUG -pedantic -std=c99 -Wall -Wextra -static
+CLIBS?=-lpthread
 TARGET=$(shell uname -m)
 BUILDIR=build/$(TARGET)
 
@@ -18,7 +19,7 @@ clean: ./hiredis/Makefile
 $(BUILDIR)/$(NAME): main.c ./hiredis/libhiredis.a
 	mkdir -p $(BUILDIR)
 	rm -rf $(BUILDIR)/*
-	$(CC) $(CFLAGS) -I./hiredis main.c ./hiredis/libhiredis.a -o $(BUILDIR)/$(NAME)
+	$(CC) $(CFLAGS) -I./hiredis main.c ./hiredis/libhiredis.a $(CLIBS) -o $(BUILDIR)/$(NAME)
 
 $(BUILDIR)/$(WIZARD): $(WIZARD)
 	cp $(WIZARD) $(BUILDIR)/

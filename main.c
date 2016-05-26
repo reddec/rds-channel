@@ -9,7 +9,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#define RDS_CHANNEL_VERSION "0.3.4"
+#define RDS_CHANNEL_VERSION "0.3.5"
 
 #define if_err_ret(err, message, code)                                  \
   if ((err)) {                                                          \
@@ -233,7 +233,7 @@ int create_heartbeat_connection(channel_t *ch) {
 
 void *heartbeat_routing(void *ctx) {
   redisContext *redis = (redisContext *)ctx;
-  while (0 && push_heartbeat(redis)) {
+  while (push_heartbeat(redis)) {
     sleep(HEART_BEAT_INTERVAL);
   }
   return NULL;

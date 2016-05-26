@@ -155,6 +155,7 @@ int main(int argc, char **argv) {
 
   printf("  to: %s:%i\n", local_host, local_port);
   printf("pref: %s\n", prefix);
+  fflush(stdout);
   channel_t ch;
   memset(&ch, 0, sizeof(ch));
   ch.source_ad.host = host;
@@ -280,6 +281,7 @@ int copy_key(redisContext *local, redisContext *remote, const char *key,
     free(temp);
   }
   freeReplyObject(src);
+  fflush(stdout);
   return ret;
 }
 
@@ -296,6 +298,7 @@ int dump_data(channel_t *ch) {
     if_err_ret(!reply, ch->source->errstr, -20);
     iterator = reply->element[0]->integer;
     printf("batch size: %zu\n", reply->element[1]->elements);
+    fflush(stdout);
     for (size_t i = 0; i < reply->element[1]->elements; ++i) {
       const char *key = reply->element[1]->element[i]->str;
       size_t key_len = reply->element[1]->element[i]->len;
@@ -340,6 +343,7 @@ int catch_notifications(channel_t *ch) {
     if (reply_code == REDIS_ERR && ch->notification->err == REDIS_ERR_IO &&
         errno == EAGAIN) {
       puts("Heartbeat timeout");
+      fflush(stdout);
       ret = 1;
     } else if (reply_code != REDIS_OK) {
       ret = 1;

@@ -9,7 +9,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#define RDS_CHANNEL_VERSION "0.3.3"
+#define RDS_CHANNEL_VERSION "0.3.4"
 
 #define if_err_ret(err, message, code)                                  \
   if ((err)) {                                                          \
